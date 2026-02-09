@@ -11,19 +11,18 @@ jobs:
       - name: Install Desktop & Dependencies
         run: |
           sudo apt-get update
-          # dbus-x11 is the key to fixing the session error
           sudo apt-get install -y xfce4 xfce4-goodies xrdp dbus-x11
 
-      - name: Create User and Force Permissions
+      - name: Create User and Setup Session
         run: |
           sudo useradd -m -s /bin/bash linuxuser || true
           echo "linuxuser:Password123!" | sudo chpasswd
           sudo usermod -aG sudo linuxuser
           
-          # FIX: Using 'sudo tee' prevents the "Permission denied" error
-          echo "exec startxfce4" | sudo tee /home/linuxuser/.xsession
+          # Use dbus-launch for proper session initialization
+          echo "dbus-launch --exit-with-session startxfce4" | sudo tee /home/linuxuser/.xsession
           sudo chown linuxuser:linuxuser /home/linuxuser/.xsession
-          sudo chmod 755 /home/linuxuser/.xsession
+          sudo chmod +x /home/linuxuser/.xsession
 
       - name: Install Tailscale
         run: |
@@ -38,13 +37,14 @@ jobs:
       - name: Start RDP Service
         run: |
           sudo systemctl enable xrdp
-          sudo systemctl restart xrdp
+          sudo systemctl start xrdp
+          sudo systemctl status xrdp --no-pager
 
       - name: Connection Info
         run: |
           IP=$(tailscale ip -4)
           echo "=========================================="
-          echo "   LINUX RDP REPAIRED"
+          echo "   LINUX RDP READY"
           echo "   IP Address: $IP"
           echo "   Username:   linuxuser"
           echo "   Password:   Password123!"
