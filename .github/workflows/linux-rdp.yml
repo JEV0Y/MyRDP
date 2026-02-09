@@ -1,33 +1,40 @@
-name: Linux-Desktop-RDP-FIXED
-
+name: Linux-Desktop-Fixed
 on:
   workflow_dispatch:
 
 jobs:
-  linux-rdp:
+  linux-rdp-fix:
     runs-on: ubuntu-latest
     timeout-minutes: 360
 
     steps:
-      - name: Install Desktop (XFCE & XRDP)
+      - name: Install Desktop & Fix Dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y xfce4 xfce4-goodies xrdp
-          
-      - name: Create User and Fix Permissions
+          # We install dbus-x11 specifically to fix the "failsafe" error you saw
+          sudo apt-get install -y xfce4 xfce4-goodies xrdp dbus-x11
+
+      - name: Create User & Fix Session Errors
         run: |
-          # Create user if it doesn't exist
+          # Create the user
           sudo useradd -m -s /bin/bash linuxuser || true
           echo "linuxuser:Password123!" | sudo chpasswd
           sudo usermod -aG sudo linuxuser
           
-          # CRITICAL FIX: Configure the desktop session for the user
-          echo "exec startxfce4" | sudo tee /home/linuxuser/.xsession
+          # FIX 1: Create the missing session file
+          echo "export XDG_SESSION_TYPE=x11" > /home/linuxuser/.xsession
+          echo "export XDG_CURRENT_DESKTOP=XFCE" >> /home/linuxuser/.xsession
+          echo "exec startxfce4" >> /home/linuxuser/.xsession
+          
+          # FIX 2: Grant correct permissions so the user can read the file
           sudo chown linuxuser:linuxuser /home/linuxuser/.xsession
-          
-          # Fix for the "Failsafe" error (D-Bus issues)
-          sudo sed -i 's/allowed_users=console/allowed_users=anybody/' /etc/X11/Xwrapper.config
-          
+          sudo chmod 755 /home/linuxuser/.xsession
+
+          # FIX 3: Allow any user to start the graphical interface
+          if [ -f /etc/X11/Xwrapper.config ]; then
+              sudo sed -i 's/allowed_users=console/allowed_users=anybody/' /etc/X11/Xwrapper.config
+          fi
+
       - name: Install Tailscale
         run: |
           curl -fsSL https://tailscale.com/install.sh | sh
@@ -36,22 +43,19 @@ jobs:
         env:
           TAILSCALE_AUTH_KEY: ${{ secrets.TAILSCALE_AUTH_KEY }}
         run: |
-          sudo tailscale up --authkey=$TAILSCALE_AUTH_KEY --hostname=linux-desktop-$GITHUB_RUN_ID
+          sudo tailscale up --authkey=$TAILSCALE_AUTH_KEY --hostname=linux-fixed-$GITHUB_RUN_ID
 
       - name: Start RDP Service
         run: |
-          sudo systemctl enable xrdp
-          sudo systemctl restart xrdp
+          sudo service xrdp restart
 
       - name: Display Connection Info
         run: |
           IP=$(tailscale ip -4)
           echo "=========================================="
-          echo "   LINUX RDP IS READY!"
+          echo "   LINUX RDP REPAIRED!"
           echo "   IP Address: $IP"
           echo "   Username:   linuxuser"
           echo "   Password:   Password123!"
           echo "=========================================="
-
-      - name: Keep Alive
-        run: sleep infinity
+          sleep infinity
