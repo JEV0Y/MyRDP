@@ -1,7 +1,7 @@
-name: Linux-Desktop-RDP
+name: Linux-Desktop-RDP-FIXED
 
 on:
- workflow_dispatch:
+  workflow_dispatch:
 
 jobs:
   linux-rdp:
@@ -9,25 +9,25 @@ jobs:
     timeout-minutes: 360
 
     steps:
-      - name: Update and Install Desktop (XFCE & XRDP)
+      - name: Install Desktop (XFCE & XRDP)
         run: |
           sudo apt-get update
           sudo apt-get install -y xfce4 xfce4-goodies xrdp
-          sudo systemctl enable xrdp
-          sudo systemctl start xrdp
           
-          # Configure XRDP to use XFCE
-          echo "xfce4-session" > /home/runner/.xsession
-          sudo service xrdp restart
-
-      - name: Create User Credentials
+      - name: Create User and Fix Permissions
         run: |
-          # Creates a user named 'linuxuser' with password 'Password123!'
-          sudo useradd -m -s /bin/bash linuxuser
+          # Create user if it doesn't exist
+          sudo useradd -m -s /bin/bash linuxuser || true
           echo "linuxuser:Password123!" | sudo chpasswd
           sudo usermod -aG sudo linuxuser
-          echo "User 'linuxuser' created successfully."
-
+          
+          # CRITICAL FIX: Configure the desktop session for the user
+          echo "exec startxfce4" | sudo tee /home/linuxuser/.xsession
+          sudo chown linuxuser:linuxuser /home/linuxuser/.xsession
+          
+          # Fix for the "Failsafe" error (D-Bus issues)
+          sudo sed -i 's/allowed_users=console/allowed_users=anybody/' /etc/X11/Xwrapper.config
+          
       - name: Install Tailscale
         run: |
           curl -fsSL https://tailscale.com/install.sh | sh
@@ -37,6 +37,11 @@ jobs:
           TAILSCALE_AUTH_KEY: ${{ secrets.TAILSCALE_AUTH_KEY }}
         run: |
           sudo tailscale up --authkey=$TAILSCALE_AUTH_KEY --hostname=linux-desktop-$GITHUB_RUN_ID
+
+      - name: Start RDP Service
+        run: |
+          sudo systemctl enable xrdp
+          sudo systemctl restart xrdp
 
       - name: Display Connection Info
         run: |
