@@ -1,1 +1,52 @@
+name: Linux-Desktop-RDP
 
+on:
+  workflow_dispatch:
+
+jobs:
+  linux-rdp:
+    runs-on: ubuntu-latest
+    timeout-minutes: 360
+
+    steps:
+      - name: Update and Install Desktop (XFCE & XRDP)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y xfce4 xfce4-goodies xrdp
+          sudo systemctl enable xrdp
+          sudo systemctl start xrdp
+          
+          # Configure XRDP to use XFCE
+          echo "xfce4-session" > /home/runner/.xsession
+          sudo service xrdp restart
+
+      - name: Create User Credentials
+        run: |
+          # Creates a user named 'linuxuser' with password 'Password123!'
+          sudo useradd -m -s /bin/bash linuxuser
+          echo "linuxuser:Password123!" | sudo chpasswd
+          sudo usermod -aG sudo linuxuser
+          echo "User 'linuxuser' created successfully."
+
+      - name: Install Tailscale
+        run: |
+          curl -fsSL https://tailscale.com/install.sh | sh
+
+      - name: Connect to Tailscale
+        env:
+          TAILSCALE_AUTH_KEY: ${{ secrets.TAILSCALE_AUTH_KEY }}
+        run: |
+          sudo tailscale up --authkey=$TAILSCALE_AUTH_KEY --hostname=linux-desktop-$GITHUB_RUN_ID
+
+      - name: Display Connection Info
+        run: |
+          IP=$(tailscale ip -4)
+          echo "=========================================="
+          echo "   LINUX RDP IS READY!"
+          echo "   IP Address: $IP"
+          echo "   Username:   linuxuser"
+          echo "   Password:   Password123!"
+          echo "=========================================="
+
+      - name: Keep Alive
+        run: sleep infinity
