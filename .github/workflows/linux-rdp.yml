@@ -11,7 +11,19 @@ jobs:
       - name: Install Desktop & Dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y xfce4 xfce4-goodies xrdp dbus-x11
+          sudo apt-get install -y xfce4 xfce4-goodies xrdp dbus-x11 xfconf xfce4-session
+
+      - name: Configure XRDP Session
+        run: |
+          # Ensure xfce4 session is configured in xrdp
+          sudo bash -c 'cat > /etc/xrdp/startwm.sh << EOF
+          #!/bin/sh
+          unset DBUS_SESSION_BUS_ADDRESS
+          unset XDG_RUNTIME_DIR
+          export XDG_CONFIG_DIRS=/etc/xdg
+          exec dbus-launch --exit-with-session startxfce4
+          EOF'
+          sudo chmod +x /etc/xrdp/startwm.sh
 
       - name: Create User and Setup Session
         run: |
@@ -19,10 +31,19 @@ jobs:
           echo "linuxuser:Password123!" | sudo chpasswd
           sudo usermod -aG sudo linuxuser
           
-          # Use dbus-launch for proper session initialization
-          echo "dbus-launch --exit-with-session startxfce4" | sudo tee /home/linuxuser/.xsession
+          # Create .xsession for the user
+          echo "xfce4-session" | sudo tee /home/linuxuser/.xsession
           sudo chown linuxuser:linuxuser /home/linuxuser/.xsession
-          sudo chmod +x /home/linuxuser/.xsession
+          sudo chmod 644 /home/linuxuser/.xsession
+          
+          # Ensure XDG directories exist
+          sudo mkdir -p /home/linuxuser/.config
+          sudo chown linuxuser:linuxuser /home/linuxuser/.config
+
+      - name: Start D-Bus
+        run: |
+          sudo systemctl start dbus
+          sudo systemctl enable dbus
 
       - name: Install Tailscale
         run: |
