@@ -1,7 +1,7 @@
 name: Linux-Desktop-RDP
 
 on:
-  workflow_dispatch:
+ workflow_dispatch:
 
 jobs:
   linux-rdp:
